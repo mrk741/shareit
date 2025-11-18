@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P File Sender</title>
+    <!-- 1. Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Load WebTorrent library -->
+    <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+    <style>
+        /* A little custom style for the drag-drop area */
+        .drop-zone {
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s;
+        }
+        .drop-zone.drag-over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-blue-600">P2P File Sender</h1>
+            <p class="text-lg text-gray-600 mt-2">Send files directly to anyone. No server. No limits.</p>
+        </header>
+
+        <div class="grid md:grid-cols-2 gap-8">
+
+            <!-- SENDER CARD -->
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-center">1. Send a File</h2>
+                
+                <!-- File Input / Drop Zone -->
+                <div id="dropZone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
+                    <p class="text-gray-500">Drag & Drop your file here</p>
+                    <p class="text-gray-400 my-2">or</p>
+                    <input type="file" id="fileInput" class="hidden">
+                    <label for="fileInput" class="cursor-pointer bg-blue-500 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-600 transition">
+                        Select File
+                    </label>
+                </div>
+
+                <!-- Sender Status -->
+                <div id="senderStatus" class="mt-4 text-center">
+                    <!-- Status messages will appear here -->
+                </div>
+
+                <!-- Generated Link -->
+                <div id="linkArea" class="hidden mt-4">
+                    <label for="magnetLink" class="block text-sm font-medium text-gray-700">Send this link to the receiver:</label>
+                    <div class="mt-1 flex rounded-md shadow-sm">
+                        <textarea id="magnetLink" rows="3" class="flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300" readonly></textarea>
+                        <button id="copyButton" class="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 bg-gray-50 text-sm font-medium text-gray-700 rounded-r-md hover:bg-gray-100">
+                            Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RECEIVER CARD -->
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-center">2. Receive a File</h2>
+                
+                <label for="linkInput" class="block text-sm font-medium text-gray-700">Paste the link from the sender:</label>
+                <textarea id="linkInput" rows="3" class="mt-1 shadow-sm block w-full sm:text-sm border-gray-300 rounded-md" placeholder="Paste link here..."></textarea>
+                
+                <button id="downloadButton" class="w-full bg-green-500 text-white px-4 py-2 rounded-md font-medium hover:bg-green-600 transition mt-4">
+                    Start Download
+                </button>
+
+                <!-- Receiver Status -->
+                <div id="receiverStatus" class="mt-4 text-center">
+                    <!-- Download status will appear here -->
+                </div>
+
+                <!-- Download Link Area -->
+                <div id="downloadArea" class="mt-4 text-center">
+                    <!-- The final download link will appear here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- How it works -->
+        <div class="mt-12 bg-gray-800 text-white p-6 rounded-lg shadow-lg">
+            <h3 class="text-xl font-semibold mb-3">How This Works</h3>
+            <ol class="list-decimal list-inside space-y-2">
+                <li><span class="font-bold">Sender:</span> Select or drop a file. A special "magnet link" is generated.</li>
+                <li><span class="font-bold">Sender:</span> Copy this link and send it to the receiver (via chat, email, etc.).</li>
+                <li><span class="font-bold">Receiver:</span> Paste the link into the "Receive" box and click "Start Download".</li>
+                <li>The file is transferred directly from the sender's browser to the receiver's browser.</li>
+            </ol>
+            <p class="mt-4 p-4 bg-yellow-200 text-yellow-900 rounded-md border border-yellow-300">
+                <span class="font-bold">IMPORTANT:</span> The sender <span class="underline">must keep this browser tab open</span> until the receiver has finished downloading. If the sender closes the tab, the transfer will stop.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Check for WebRTC support
+        if (!WebTorrent.WEBRTC_SUPPORT) {
+            alert('Sorry, your browser does not support WebRTC, which is required for this app to work.');
+        }
+
+        const client = new WebTorrent();
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const senderStatus = document.getElementById('senderStatus');
+        const linkArea = document.getElementById('linkArea');
+        const magnetLink = document.getElementById('magnetLink');
+        const copyButton = document.getElementById('copyButton');
+        
+        const linkInput = document.getElementById('linkInput');
+        const downloadButton = document.getElementById('downloadButton');
+        const receiverStatus = document.getElementById('receiverStatus');
+        const downloadArea = document.getElementById('downloadArea');
+
+        // --- SENDER LOGIC ---
+
+        function handleFileSelect() {
+            if (fileInput.files.length === 0) return;
+            const file = fileInput.files[0];
+            
+            senderStatus.innerHTML = '<p class="text-blue-500">Generating link... (This may take a moment for large files)</p>';
+            linkArea.classList.add('hidden');
+
+            // Seed the file
+            client.seed(fileInput.files, (torrent) => {
+                console.log('Client is seeding:', torrent.infoHash);
+                
+                magnetLink.value = torrent.magnetURI;
+                linkArea.classList.remove('hidden');
+                senderStatus.innerHTML = '<p class="text-green-600 font-bold">✅ Link generated! Ready to send.</p><p class="text-red-600 mt-2"><b>Do not close this tab.</b></p>';
+            });
+        }
+
+        // File input change
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // Drag and drop events
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect();
+        });
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Copy button
+        copyButton.addEventListener('click', () => {
+            magnetLink.select();
+            // Use execCommand for broader compatibility in iFrames
+            try {
+                document.execCommand('copy');
+                copyButton.innerText = 'Copied!';
+                setTimeout(() => { copyButton.innerText = 'Copy'; }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+                // Fallback for browsers that don't support execCommand
+                navigator.clipboard.writeText(magnetLink.value).then(() => {
+                    copyButton.innerText = 'Copied!';
+                    setTimeout(() => { copyButton.innerText = 'Copy'; }, 2000);
+                }).catch(err => {
+                    console.error('Clipboard API failed: ', err);
+                });
+            }
+        });
+
+        // --- RECEIVER LOGIC ---
+
+        downloadButton.addEventListener('click', () => {
+            const magnetURI = linkInput.value.trim();
+            if (!magnetURI) {
+                alert('Please paste a link first.');
+                return;
+            }
+
+            receiverStatus.innerHTML = '<p class="text-blue-500">Connecting to peer...</p>';
+            downloadArea.innerHTML = '';
+            
+            client.add(magnetURI, (torrent) => {
+                console.log('Client is downloading:', torrent.infoHash);
+                
+                const file = torrent.files[0];
+                
+                receiverStatus.innerHTML = `<p class="text-blue-500">Downloading: <b>${file.name}</b></p><div class="w-full bg-gray-200 rounded-full mt-2"><div id="progressBar" class="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div></div>`;
+                
+                const progressBar = document.getElementById('progressBar');
+
+                // Update progress bar
+                torrent.on('download', (bytes) => {
+                    const progress = (torrent.progress * 100).toFixed(1);
+                    progressBar.style.width = progress + '%';
+                    progressBar.innerText = progress + '%';
+                });
+
+                // When download is done
+                torrent.on('done', () => {
+                    receiverStatus.innerHTML = `<p class="text-green-600 font-bold">✅ Download Complete!</p>`;
+                    progressBar.style.width = '100%';
+                    progressBar.innerText = '100%';
+                    
+                    // Get a blob URL for the file
+                    file.getBlobURL((err, url) => {
+                        if (err) {
+                            console.error(err);
+                            downloadArea.innerHTML = `<p class="text-red-500">Error creating download link.</p>`;
+                            return;
+                        }
+                        
+                        // Create and show a download link
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name;
+                        a.textContent = `Click here to download "${file.name}"`;
+                        a.className = "text-lg font-medium text-green-700 underline hover:text-green-800";
+                        downloadArea.appendChild(a);
+                    });
+                });
+            });
+        });
+
+        // Client-wide error handling
+        client.on('error', (err) => {
+            console.error('WebTorrent error:', err);
+            // Show a more user-friendly error
+            if (senderStatus.innerHTML.includes('Generating') || senderStatus.innerHTML.includes('Ready')) {
+                senderStatus.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
+            }
+            if (receiverStatus.innerHTML.includes('Connecting') || receiverStatus.innerHTML.includes('Downloading')) {
+                receiverStatus.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
+            }
+        });
+
+    </script>
+</body>
+</html>
