@@ -114,195 +114,221 @@
     </footer>
 
     <script>
-        // Check for WebRTC support
-        if (!WebTorrent.WEBRTC_SUPPORT) {
-            const errorContainer = document.getElementById('errorContainer');
-            errorContainer.innerHTML = `
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                    <strong class="font-bold">Error:</strong>
-                    <span class="block sm:inline">Your browser does not support WebRTC, which is required for this app to work.</span>
-                </div>
-            `;
-        }
-
-        const client = new WebTorrent();
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const senderStatus = document.getElementById('senderStatus');
-        const linkArea = document.getElementById('linkArea');
-        const magnetLink = document.getElementById('magnetLink');
-        const copyButton = document.getElementById('copyButton');
-        const senderProgressArea = document.getElementById('senderProgressArea');
-        
-        const linkInput = document.getElementById('linkInput');
-        const downloadButton = document.getElementById('downloadButton');
-        const receiverStatus = document.getElementById('receiverStatus');
-        const downloadArea = document.getElementById('downloadArea');
-
-        // --- SENDER LOGIC ---
-
-        function handleFileSelect() {
-            if (fileInput.files.length === 0) return;
-            const file = fileInput.files[0];
+        // Wrap the entire script in a DOMContentLoaded event listener
+        // This ensures the WebTorrent library is loaded before this script runs
+        window.addEventListener('DOMContentLoaded', (event) => {
             
-            senderStatus.innerHTML = `
-                <p class="text-blue-500 font-bold"><b>Hashing file...</b></p>
-                <p class="text-gray-600 text-sm">(This can take time for large files. Please wait.)</p>
-            `;
-            linkArea.classList.add('hidden');
-            senderProgressArea.classList.add('hidden');
-
-            // Seed the file
-            client.seed(fileInput.files, (torrent) => {
-                console.log('Client is seeding:', torrent.infoHash);
-                
-                magnetLink.value = torrent.magnetURI;
-                linkArea.classList.remove('hidden');
-                senderStatus.innerHTML = '<p class="text-green-600 font-bold">✅ Link generated! Ready to send.</p><p class="text-red-600 mt-2"><b>Do not close this tab.</b></p>';
-
-                // Show progress bar area
-                senderProgressArea.classList.remove('hidden');
-                senderProgressArea.innerHTML = `
-                    <p class="text-gray-700">Waiting for receiver...</p>
-                    <div class="w-full bg-gray-200 rounded-full mt-2">
-                        <div id="senderProgressBar" class="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div>
+            // --- 1. Initial Checks ---
+            
+            // First, check if the WebTorrent library loaded successfully
+            if (typeof WebTorrent === 'undefined') {
+                const errorContainer = document.getElementById('errorContainer');
+                errorContainer.innerHTML = `
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">Fatal Error:</strong>
+                        <span class="block sm:inline">Could not load the file-sharing library. Please check your internet connection and refresh the page.</span>
                     </div>
                 `;
-                const senderProgressBar = document.getElementById('senderProgressBar');
-
-                // Notify when a peer connects
-                torrent.on('wire', (wire, addr) => {
-                    console.log('Connected to peer:', addr);
-                    senderStatus.innerHTML = `
-                        <p class="text-green-600 font-bold">✅ Receiver connected!</p>
-                        <p class="text-blue-600">Uploading... Do not close this tab.</p>
-                    `;
-                });
-
-                // Update sender progress bar
-                torrent.on('upload', (bytes) => {
-                    const progress = (torrent.uploaded / torrent.length * 100).toFixed(1);
-                    senderProgressBar.style.width = progress + '%';
-                    senderProgressBar.innerText = progress + '%';
-
-                    if (torrent.uploaded === torrent.length) {
-                        senderStatus.innerHTML = `
-                            <p class="text-green-600 font-bold">✅ File Upload Complete!</p>
-                            <p class="text-gray-700">You can now send another file.</p>
-                        `;
-                    }
-                });
-            });
-        }
-
-        // File input change
-        fileInput.addEventListener('change', handleFileSelect);
-
-        // Drag and drop events
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        });
-        dropZone.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-        });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-            fileInput.files = e.dataTransfer.files;
-            handleFileSelect();
-        });
-        dropZone.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // Copy button
-        copyButton.addEventListener('click', () => {
-            magnetLink.select();
-            // Use execCommand for broader compatibility in iFrames
-            try {
-                document.execCommand('copy');
-                copyButton.innerText = 'Copied!';
-                setTimeout(() => { copyButton.innerText = 'Copy'; }, 2000);
-            } catch (err) {
-                console.error('Failed to copy text: ', err);
-                // Fallback for browsers that don't support execCommand
-                navigator.clipboard.writeText(magnetLink.value).then(() => {
-                    copyButton.innerText = 'Copied!';
-                    setTimeout(() => { copyButton.innerText = 'Copy'; }, 2000);
-                }).catch(err => {
-                    console.error('Clipboard API failed: ', err);
-                });
-            }
-        });
-
-        // --- RECEIVER LOGIC ---
-
-        downloadButton.addEventListener('click', () => {
-            const magnetURI = linkInput.value.trim();
-            if (!magnetURI) {
-                receiverStatus.innerHTML = '<p class="text-red-500">Please paste a link first.</p>';
-                return;
+                return; // Stop the script
             }
 
-            receiverStatus.innerHTML = '<p class="text-blue-500">Connecting to peer...</p>';
-            downloadArea.innerHTML = '';
+            // Check for WebRTC support
+            if (!WebTorrent.WEBRTC_SUPPORT) {
+                const errorContainer = document.getElementById('errorContainer');
+                errorContainer.innerHTML = `
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong class="font-bold">Error:</strong>
+                        <span class="block sm:inline">Your browser does not support WebRTC, which is required for this app to work.</span>
+                    </div>
+                `;
+                return; // Stop the script if WebRTC is not supported
+            }
+
+            // --- 2. Element Definitions ---
+            const client = new WebTorrent();
             
-            client.add(magnetURI, (torrent) => {
-                console.log('Client is downloading:', torrent.infoHash);
-                
-                const file = torrent.files[0];
-                
-                receiverStatus.innerHTML = `<p class="text-blue-500">Downloading: <b>${file.name}</b></p><div class="w-full bg-gray-200 rounded-full mt-2"><div id="progressBar" class="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div></div>`;
-                
-                const progressBar = document.getElementById('progressBar');
+            // Sender elements
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const senderStatus = document.getElementById('senderStatus');
+            const senderProgressArea = document.getElementById('senderProgressArea');
+            const linkArea = document.getElementById('linkArea');
+            const magnetLink = document.getElementById('magnetLink');
+            const copyButton = document.getElementById('copyButton');
+            
+            // Receiver elements
+            const linkInput = document.getElementById('linkInput');
+            const downloadButton = document.getElementById('downloadButton');
+            const receiverStatus = document.getElementById('receiverStatus');
+            const downloadArea = document.getElementById('downloadArea');
 
-                // Update progress bar
-                torrent.on('download', (bytes) => {
-                    const progress = (torrent.progress * 100).toFixed(1);
-                    progressBar.style.width = progress + '%';
-                    progressBar.innerText = progress + '%';
-                });
 
-                // When download is done
-                torrent.on('done', () => {
-                    receiverStatus.innerHTML = `<p class="text-green-600 font-bold">✅ Download Complete!</p>`;
-                    progressBar.style.width = '100%';
-                    progressBar.innerText = '100%';
+            // --- 3. SENDER LOGIC (wrapped in a function) ---
+            function handleFileSelect() {
+                if (fileInput.files.length === 0) return;
+                
+                senderStatus.innerHTML = `
+                    <p class="text-blue-500 font-bold"><b>Hashing file...</b></p>
+                    <p class="text-gray-600 text-sm">(This can take time for large files. Please wait.)</p>
+                `;
+                linkArea.classList.add('hidden');
+                senderProgressArea.classList.add('hidden');
+
+                // Seed the file
+                client.seed(fileInput.files, (torrent) => {
+                    console.log('Client is seeding:', torrent.infoHash);
                     
-                    // Get a blob URL for the file
-                    file.getBlobURL((err, url) => {
-                        if (err) {
-                            console.error(err);
-                            downloadArea.innerHTML = `<p class="text-red-500">Error creating download link.</p>`;
-                            return;
+                    magnetLink.value = torrent.magnetURI;
+                    linkArea.classList.remove('hidden');
+                    senderStatus.innerHTML = '<p class="text-green-600 font-bold">✅ Link generated! Ready to send.</p><p class="text-red-600 mt-2"><b>Do not close this tab.</b></p>';
+
+                    // Show progress bar area
+                    senderProgressArea.classList.remove('hidden');
+                    senderProgressArea.innerHTML = `
+                        <p class="text-gray-700">Waiting for receiver...</p>
+                        <div class="w-full bg-gray-200 rounded-full mt-2">
+                            <div id="senderProgressBar" class="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div>
+                        </div>
+                    `;
+                    const senderProgressBar = document.getElementById('senderProgressBar');
+
+                    // Notify when a peer connects
+                    torrent.on('wire', (wire, addr) => {
+                        console.log('Connected to peer:', addr);
+                        senderStatus.innerHTML = `
+                            <p class="text-green-600 font-bold">✅ Receiver connected!</p>
+                            <p class="text-blue-600">Uploading... Do not close this tab.</p>
+                        `;
+                    });
+
+                    // Update sender progress bar
+                    torrent.on('upload', (bytes) => {
+                        // Ensure torrent.length is not zero to avoid division by zero
+                        if (torrent.length > 0) {
+                            const progress = (torrent.uploaded / torrent.length * 100).toFixed(1);
+                            senderProgressBar.style.width = progress + '%';
+                            senderProgressBar.innerText = progress + '%';
+
+                            if (torrent.uploaded === torrent.length) {
+                                senderStatus.innerHTML = `
+                                    <p class="text-green-600 font-bold">✅ File Upload Complete!</p>
+                                    <p class="text-gray-700">You can now send another file.</p>
+                                `;
+                            }
                         }
-                        
-                        // Create and show a download link
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = file.name;
-                        a.textContent = `Click here to download "${file.name}"`;
-                        a.className = "text-lg font-medium text-green-700 underline hover:text-green-800";
-                        downloadArea.appendChild(a);
                     });
                 });
+            }
+
+            // --- 4. Event Listeners ---
+
+            // Sender listeners
+            fileInput.addEventListener('change', handleFileSelect);
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
             });
-        });
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+            });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect();
+            });
+            dropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
 
-        // Client-wide error handling
-        client.on('error', (err) => {
-            console.error('WebTorrent error:', err);
-            // Show a more user-friendly error
-            if (senderStatus.innerHTML.includes('Generating') || senderStatus.innerHTML.includes('Ready')) {
-                senderStatus.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
-            }
-            if (receiverStatus.innerHTML.includes('Connecting') || receiverStatus.innerHTML.includes('Downloading')) {
-                receiverStatus.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
-            }
-        });
+            copyButton.addEventListener('click', () => {
+                magnetLink.select();
+                // Use execCommand for broader compatibility in iFrames
+                try {
+                    document.execCommand('copy');
+                    copyButton.innerText = 'Copied!';
+                    setTimeout(() => { copyButton.innerText = 'Copy'; }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                    // Fallback for browsers that don't support execCommand
+                    navigator.clipboard.writeText(magnetLink.value).then(() => {
+                        copyButton.innerText = 'Copied!';
+                        setTimeout(() => { copyButton.innerText = 'Copy'; }, 2000);
+                    }).catch(err => {
+                        console.error('Clipboard API failed: ', err);
+                    });
+                }
+            });
 
+            // --- RECEIVER LOGIC ---
+
+            downloadButton.addEventListener('click', () => {
+                const magnetURI = linkInput.value.trim();
+                if (!magnetURI) {
+                    receiverStatus.innerHTML = '<p class="text-red-500">Please paste a link first.</p>';
+                    return;
+                }
+
+                receiverStatus.innerHTML = '<p class="text-blue-500">Connecting to peer...</p>';
+                downloadArea.innerHTML = '';
+                
+                client.add(magnetURI, (torrent) => {
+                    console.log('Client is downloading:', torrent.infoHash);
+                    
+                    const file = torrent.files[0];
+                    
+                    receiverStatus.innerHTML = `<p class="text-blue-500">Downloading: <b>${file.name}</b></p><div class="w-full bg-gray-200 rounded-full mt-2"><div id="progressBar" class="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div></div>`;
+                    
+                    const progressBar = document.getElementById('progressBar');
+
+                    // Update progress bar
+                    torrent.on('download', (bytes) => {
+                        const progress = (torrent.progress * 100).toFixed(1);
+                        progressBar.style.width = progress + '%';
+                        progressBar.innerText = progress + '%';
+                    });
+
+                    // When download is done
+                    torrent.on('done', () => {
+                        receiverStatus.innerHTML = `<p class="text-green-600 font-bold">✅ Download Complete!</p>`;
+                        progressBar.style.width = '100%';
+                        progressBar.innerText = '100%';
+                        
+                        // Get a blob URL for the file
+                        file.getBlobURL((err, url) => {
+                            if (err) {
+                                console.error(err);
+                                downloadArea.innerHTML = `<p class="text-red-500">Error creating download link.</p>`;
+                                return;
+                            }
+                            
+                            // Create and show a download link
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = file.name;
+                            a.textContent = `Click here to download "${file.name}"`;
+                            a.className = "text-lg font-medium text-green-700 underline hover:text-green-800";
+                            downloadArea.appendChild(a);
+                        }); // Fixed: Added missing closing brace and parenthesis
+                    });
+                }); // Fixed: Added missing closing brace and parenthesis
+            });
+
+            // Client-wide error handling
+            client.on('error', (err) => {
+                console.error('WebTorrent error:', err);
+                // Show a more user-friendly error
+                if (senderStatus.innerHTML.includes('Hashing') || senderStatus.innerHTML.includes('Waiting')) {
+                    senderStatus.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
+                }
+                if (receiverStatus.innerHTML.includes('Connecting') || receiverStatus.innerHTML.includes('Downloading')) {
+                    receiverStatus.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
+                }
+            });
+
+        }); // End of DOMContentLoaded listener
     </script>
 </body>
 </html>
